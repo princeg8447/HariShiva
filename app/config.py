@@ -45,7 +45,6 @@ FACE_ENCODINGS_FILE = EMBEDDINGS_DIR / "face_encodings.pkl"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Delhi")
-PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
 WAKE_WORD_MODEL_PATH = os.getenv("WAKE_WORD_MODEL_PATH", "")
 
 # ── Audio ────────────────────────────────────────────────────────────────

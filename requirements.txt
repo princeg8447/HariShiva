@@ -11,5 +11,6 @@ ultralytics
 mediapipe
 face_recognition
 deepface
-pvporcupine
 pvrecorder
+openwakeword
+onnxruntime

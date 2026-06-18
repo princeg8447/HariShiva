@@ -13,13 +13,15 @@ from voice import audio_manager
 from pathlib import Path
 from app import config
 
+import numpy as np
+
 # Try importing offline wake-word dependencies
 try:
-    import pvporcupine
+    from openwakeword.model import Model as OwwModel
     from pvrecorder import PvRecorder
-    _HAS_PORCUPINE = True
+    _HAS_OWW = True
 except ImportError:
-    _HAS_PORCUPINE = False
+    _HAS_OWW = False
 
 _SR = sr.Recognizer()
 _SR.pause_threshold = 0.8  # don't split sentences on natural mid-phrase pauses
@@ -194,12 +196,12 @@ def wait_for_wake_word(wake_words: tuple[str, ...] = ("hari",), on_text=None) ->
     `on_text(text)` is called if provided - e.g. to let an unknown person
     introduce themselves before the wake word.
     """
-    # ── Try Offline Wake Word Detection (Porcupine) ──────────────────────────
-    if _HAS_PORCUPINE and config.PICOVOICE_ACCESS_KEY:
-        porcupine = None
+    # ── Try Offline Wake Word Detection (openWakeWord) ────────────────────────
+    if _HAS_OWW:
+        oww_model = None
         recorder = None
         try:
-            # 1. Search for custom .ppn model file
+            # 1. Search for custom .onnx model file
             model_file = None
             if config.WAKE_WORD_MODEL_PATH:
                 model_path = Path(config.WAKE_WORD_MODEL_PATH)
@@ -208,33 +210,28 @@ def wait_for_wake_word(wake_words: tuple[str, ...] = ("hari",), on_text=None) ->
             else:
                 wake_word_dir = Path(config.WAKE_WORD_MODELS_DIR)
                 if wake_word_dir.exists():
-                    ppn_files = list(wake_word_dir.glob("*.ppn"))
+                    onnx_files = list(wake_word_dir.glob("*.onnx"))
                     # Try to find one matching WAKE_WORD
-                    for f in ppn_files:
+                    for f in onnx_files:
                         if config.WAKE_WORD.lower() in f.name.lower():
                             model_file = f
                             break
-                    # Default fallback to first .ppn if exists
-                    if not model_file and ppn_files:
-                        model_file = ppn_files[0]
+                    # Default fallback to first .onnx if exists
+                    if not model_file and onnx_files:
+                        model_file = onnx_files[0]
 
-            # 2. Initialize Porcupine
+            # 2. Initialize openWakeWord Model
             if model_file:
                 print(f"[Voice] Initializing offline wake word using custom model: {model_file.name}")
-                porcupine = pvporcupine.create(
-                    access_key=config.PICOVOICE_ACCESS_KEY,
-                    keyword_paths=[str(model_file)]
-                )
-            elif config.WAKE_WORD.lower() in pvporcupine.KEYWORDS:
-                print(f"[Voice] Initializing offline wake word using built-in keyword: {config.WAKE_WORD}")
-                porcupine = pvporcupine.create(
-                    access_key=config.PICOVOICE_ACCESS_KEY,
-                    keywords=[config.WAKE_WORD.lower()]
-                )
+                oww_model = OwwModel(wakeword_models=[str(model_file)])
+            else:
+                # Fallback: check if the configured wake_word is built-in or if we can initialize it
+                print(f"[Voice] Initializing offline wake word using built-in model: {config.WAKE_WORD}")
+                oww_model = OwwModel(wakeword_models=[config.WAKE_WORD.lower()])
 
-            # 3. Stream audio and listen for wake word
-            if porcupine:
-                recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
+            # 3. Stream audio and listen for wake word (openWakeWord uses 1280 frame size)
+            if oww_model:
+                recorder = PvRecorder(device_index=-1, frame_length=1280)
                 recorder.start()
                 print(f"[Voice] Offline wake word detection active. Listening for '{config.WAKE_WORD}'...")
 
@@ -250,10 +247,15 @@ def wait_for_wake_word(wake_words: tuple[str, ...] = ("hari",), on_text=None) ->
                             recorder.start()
 
                     pcm = recorder.read()
-                    keyword_index = porcupine.process(pcm)
-                    if keyword_index >= 0:
-                        print(f"[Voice] Offline wake word detected: '{config.WAKE_WORD}'")
-                        return ""  # Trigger standard prompt listening
+                    audio_data = np.array(pcm, dtype=np.int16)
+                    
+                    prediction = oww_model.predict(audio_data)
+                    
+                    # Check scores of all active wake word models
+                    for word, score in prediction.items():
+                        if score > 0.5:
+                            print(f"[Voice] Offline wake word detected: '{word}' (score: {score:.2f})")
+                            return ""  # Trigger standard prompt listening
         except Exception as e:
             print(f"[Voice] Offline wake word initialization failed: {e}. Falling back to Google.")
         finally:
@@ -261,11 +263,6 @@ def wait_for_wake_word(wake_words: tuple[str, ...] = ("hari",), on_text=None) ->
                 try:
                     recorder.stop()
                     recorder.delete()
-                except Exception:
-                    pass
-            if porcupine:
-                try:
-                    porcupine.delete()
                 except Exception:
                     pass
 
