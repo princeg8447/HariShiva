@@ -1,0 +1,19 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+
+# Data (created at runtime)
+data/
+logs/
+models/
+
+# ML weights
+*.pt
+
+# macOS
+.DS_Store

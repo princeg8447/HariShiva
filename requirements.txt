@@ -1,0 +1,13 @@
+python-dotenv
+opencv-python
+numpy
+pygame
+requests
+SpeechRecognition
+gTTS
+edge-tts
+groq
+ultralytics
+mediapipe
+face_recognition
+deepface

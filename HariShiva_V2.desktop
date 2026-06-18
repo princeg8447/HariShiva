@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=HariShiva V2
+Comment=Launch the HariShiva V2 voice/vision assistant
+Exec=lxterminal --working-directory=/home/admin/Desktop/HariShiva_V2 -e /home/admin/Desktop/HariShiva_V2/run.sh
+Icon=utility-terminal
+Terminal=false
+Type=Application
+Categories=Utility
+StartupNotify=true
