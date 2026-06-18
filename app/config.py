@@ -36,6 +36,7 @@ BACKUPS_DIR = DATA_DIR / "backups"
 FACE_MODELS_DIR = MODELS_DIR / "face_models"
 EMOTION_MODELS_DIR = MODELS_DIR / "emotion_models"
 CUSTOM_MODELS_DIR = MODELS_DIR / "custom_models"
+WAKE_WORD_MODELS_DIR = MODELS_DIR / "wake_word"
 
 DATABASE_PATH = DATA_DIR / "harishiva.db"
 FACE_ENCODINGS_FILE = EMBEDDINGS_DIR / "face_encodings.pkl"
@@ -44,6 +45,8 @@ FACE_ENCODINGS_FILE = EMBEDDINGS_DIR / "face_encodings.pkl"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "Delhi")
+PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
+WAKE_WORD_MODEL_PATH = os.getenv("WAKE_WORD_MODEL_PATH", "")
 
 # ── Audio ────────────────────────────────────────────────────────────────
 # Bluetooth speaker sink name, e.g. "bluez_sink.AA_BB_CC_DD_EE_FF.a2dp_sink"
@@ -88,5 +91,6 @@ def ensure_directories() -> None:
         FACE_MODELS_DIR,
         EMOTION_MODELS_DIR,
         CUSTOM_MODELS_DIR,
+        WAKE_WORD_MODELS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)

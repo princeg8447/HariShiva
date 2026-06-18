@@ -9,8 +9,17 @@ import threading
 import time
 
 import speech_recognition as sr
-
 from voice import audio_manager
+from pathlib import Path
+from app import config
+
+# Try importing offline wake-word dependencies
+try:
+    import pvporcupine
+    from pvrecorder import PvRecorder
+    _HAS_PORCUPINE = True
+except ImportError:
+    _HAS_PORCUPINE = False
 
 _SR = sr.Recognizer()
 _SR.pause_threshold = 0.8  # don't split sentences on natural mid-phrase pauses
@@ -185,6 +194,83 @@ def wait_for_wake_word(wake_words: tuple[str, ...] = ("hari",), on_text=None) ->
     `on_text(text)` is called if provided - e.g. to let an unknown person
     introduce themselves before the wake word.
     """
+    # ── Try Offline Wake Word Detection (Porcupine) ──────────────────────────
+    if _HAS_PORCUPINE and config.PICOVOICE_ACCESS_KEY:
+        porcupine = None
+        recorder = None
+        try:
+            # 1. Search for custom .ppn model file
+            model_file = None
+            if config.WAKE_WORD_MODEL_PATH:
+                model_path = Path(config.WAKE_WORD_MODEL_PATH)
+                if model_path.exists():
+                    model_file = model_path
+            else:
+                wake_word_dir = Path(config.WAKE_WORD_MODELS_DIR)
+                if wake_word_dir.exists():
+                    ppn_files = list(wake_word_dir.glob("*.ppn"))
+                    # Try to find one matching WAKE_WORD
+                    for f in ppn_files:
+                        if config.WAKE_WORD.lower() in f.name.lower():
+                            model_file = f
+                            break
+                    # Default fallback to first .ppn if exists
+                    if not model_file and ppn_files:
+                        model_file = ppn_files[0]
+
+            # 2. Initialize Porcupine
+            if model_file:
+                print(f"[Voice] Initializing offline wake word using custom model: {model_file.name}")
+                porcupine = pvporcupine.create(
+                    access_key=config.PICOVOICE_ACCESS_KEY,
+                    keyword_paths=[str(model_file)]
+                )
+            elif config.WAKE_WORD.lower() in pvporcupine.KEYWORDS:
+                print(f"[Voice] Initializing offline wake word using built-in keyword: {config.WAKE_WORD}")
+                porcupine = pvporcupine.create(
+                    access_key=config.PICOVOICE_ACCESS_KEY,
+                    keywords=[config.WAKE_WORD.lower()]
+                )
+
+            # 3. Stream audio and listen for wake word
+            if porcupine:
+                recorder = PvRecorder(device_index=-1, frame_length=porcupine.frame_length)
+                recorder.start()
+                print(f"[Voice] Offline wake word detection active. Listening for '{config.WAKE_WORD}'...")
+
+                while True:
+                    # Don't capture speaker output (mute mic/stop detection while speaking)
+                    if audio_manager.is_speaking:
+                        if recorder.is_recording:
+                            recorder.stop()
+                        time.sleep(0.2)
+                        continue
+                    else:
+                        if not recorder.is_recording:
+                            recorder.start()
+
+                    pcm = recorder.read()
+                    keyword_index = porcupine.process(pcm)
+                    if keyword_index >= 0:
+                        print(f"[Voice] Offline wake word detected: '{config.WAKE_WORD}'")
+                        return ""  # Trigger standard prompt listening
+        except Exception as e:
+            print(f"[Voice] Offline wake word initialization failed: {e}. Falling back to Google.")
+        finally:
+            if recorder:
+                try:
+                    recorder.stop()
+                    recorder.delete()
+                except Exception:
+                    pass
+            if porcupine:
+                try:
+                    porcupine.delete()
+                except Exception:
+                    pass
+
+    # ── Fallback: Original Cloud-based Google Speech Recognition ─────────────
+    print("[Voice] Using cloud-based Google wake word engine...")
     with sr.Microphone() as source:
         while True:
             try:
